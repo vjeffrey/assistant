@@ -6,7 +6,28 @@
       "Bash(./assistant)",
       "Bash(CGO_ENABLED=1 go build:*)",
       "Bash(./assistant --list:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(gh --version:*)",
+      "Bash(./assistant --github)",
+      "Bash(gh issue list:*)",
+      "Bash(gh search:*)",
+      "Bash(gh pr list:*)",
+      "Bash(if [ -n \"$GITHUB_TOKEN\" ])",
+      "Bash(then echo \"GITHUB_TOKEN is set\")",
+      "Bash(else echo \"GITHUB_TOKEN is not set\")",
+      "Bash(fi)",
+      "Bash(gh auth status:*)",
+      "Bash(env)",
+      "Bash(GITHUB_TOKEN_ASSISTANT_MONDOOHQ=\"test\" ./assistant:*)",
+      "Bash(GITHUB_TOKEN_ASSISTANT_MONDOOHQ=\"$GITHUB_TOKEN\" ./assistant --github)",
+      "Bash(export GITHUB_TOKEN_ASSISTANT_MONDOOHQ=\"$GITHUB_TOKEN\")",
+      "Bash(if [ -n \"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" ])",
+      "Bash(then echo \"GITHUB_TOKEN_ASSISTANT_MONDOOHQ is set\")",
+      "Bash(else echo \"GITHUB_TOKEN_ASSISTANT_MONDOOHQ is not set\")",
+      "Bash(echo:*)",
+      "Bash(gh auth login:*)",
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh search:*)",
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh search issues org:mondoohq assignee:vjeffrey is:issue is:open --json number,title --limit 5)"
     ]
   }
 }

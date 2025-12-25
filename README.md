@@ -20,6 +20,13 @@ The assistant sends desktop notifications at specific times each day and provide
   - Allows you to add new reminders with custom times
   - Reminds you of your daily focus if set
 
+### GitHub Integration
+
+- **View GitHub Assignments**: See all issues assigned to you across multiple organizations
+- **Track Mentions**: Find all issues and PRs where you've been mentioned
+- **Monitor Recent Merges**: Track PRs merged in the last 12 hours in key repositories
+- **Multi-Organization Support**: Works with separate authentication tokens per organization
+
 ### Data Management
 
 - **Desktop Notifications**: Native system notifications on macOS, Linux, and Windows
@@ -34,6 +41,8 @@ The assistant sends desktop notifications at specific times each day and provide
 - Go 1.21 or later
 - CGO enabled (required for SQLite)
 - GCC or compatible C compiler
+- GitHub CLI (`gh`) - Required for GitHub integration features
+  - Install: `brew install gh` (macOS), `apt install gh` (Ubuntu/Debian), or see [GitHub CLI docs](https://cli.github.com/)
 
 ### Build
 
@@ -56,9 +65,11 @@ After building, you'll have an `assistant` binary in the current directory.
 ./assistant --daemon           # Run in background with scheduled notifications
 ./assistant --questions        # Answer daily questions (journal, exercise, reminders)
 ./assistant --morning          # Answer morning question about daily focus
+./assistant --github           # Show GitHub assignments, mentions, and recent merges
 ./assistant --list journal     # List all journal entries
 ./assistant --list exercise    # List all exercise entries
 ./assistant --list reminders   # List all reminders
+./assistant --list symptoms    # List all symptom entries
 ```
 
 ### Start the daemon (background service)
@@ -106,9 +117,88 @@ View your complete history anytime:
 ./assistant --list journal     # All journal entries with timestamps
 ./assistant --list exercise    # All exercise logs with timestamps
 ./assistant --list reminders   # All reminders with creation and reminder times
+./assistant --list symptoms    # All symptom entries with timestamps
 ```
 
 Entries are displayed in reverse chronological order (newest first).
+
+### GitHub Integration
+
+Track your GitHub work across multiple organizations:
+
+```bash
+./assistant --github
+```
+
+This command displays:
+- **Assigned Issues**: All issues assigned to you in `mondoohq` and `mondoo-community` organizations
+- **Mentions**: Issues and PRs where you've been mentioned
+- **Recent Merges**: PRs merged in the last 12 hours in key repositories (server, console, test-metrics-bigquery)
+
+#### Setup
+
+The GitHub integration requires GitHub CLI (`gh`) and organization-specific access tokens:
+
+1. **Install GitHub CLI**:
+   ```bash
+   brew install gh  # macOS
+   # or
+   sudo apt install gh  # Ubuntu/Debian
+   ```
+
+2. **Set up environment variables**:
+   ```bash
+   export GITHUB_TOKEN_ASSISTANT_MONDOOHQ="ghp_your_mondoohq_token"
+   export GITHUB_TOKEN_ASSISTANT_MONDOO_COMMUNITY="ghp_your_mondoo_community_token"
+   ```
+
+   Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist across sessions.
+
+3. **Token Requirements**:
+   - Create personal access tokens at [github.com/settings/tokens](https://github.com/settings/tokens)
+   - Required scopes: `repo`, `read:org` (for private repositories)
+   - Use separate tokens for each organization if they have different access requirements
+
+#### Example Output
+
+```
+🔍 Fetching GitHub assignments...
+
+📋 Issues assigned to vjeffrey:
+================================================================================
+
+#1234 - Fix authentication bug
+  Repository: mondoohq/server
+  URL: https://github.com/mondoohq/server/issues/1234
+  State: OPEN
+  Updated: 2025-12-25 10:30
+
+Total: 1 issue(s)
+
+💬 Issues and PRs mentioning vjeffrey:
+================================================================================
+
+Pull Requests:
+
+#5678 - Add new feature
+  Repository: mondoohq/console
+  URL: https://github.com/mondoohq/console/pull/5678
+  State: OPEN
+  Updated: 2025-12-25 09:15
+
+Total: 0 issue(s) and 1 PR(s)
+
+✅ Recently merged PRs (last 12 hours):
+================================================================================
+
+#9999 - Update dependencies
+  Repository: mondoohq/server
+  URL: https://github.com/mondoohq/server/pull/9999
+  State: MERGED
+  Merged: 2025-12-25 08:00
+
+Total: 1 PR(s) merged in the last 12 hours
+```
 
 ## Database Schema
 
@@ -285,6 +375,7 @@ systemctl --user disable assistant
 ├── database.go      # SQLite database management and CRUD operations
 ├── scheduler.go     # Cron-based scheduler for timed notifications
 ├── cli.go           # Interactive CLI for questions and listing data
+├── github.go        # GitHub integration using gh CLI
 ├── build.sh         # Build script with CGO enabled
 ├── go.mod           # Go module dependencies
 └── README.md        # This file
@@ -304,6 +395,7 @@ systemctl --user disable assistant
 - **Logs are written** to `~/.assistant/assistant.log` when running in daemon mode
 - **CGO is required** because SQLite needs C bindings
 - **Daily focus is temporary** - it only reminds you on the day you set it
+- **GitHub integration** requires GitHub CLI (`gh`) and organization-specific tokens set as environment variables
 
 ## Troubleshooting
 
@@ -332,6 +424,21 @@ systemctl --user disable assistant
 - Verify your system time is correct
 - Check that the daemon process hasn't crashed (check logs)
 - If using a system service, check service status
+
+### GitHub Integration Issues
+
+**GitHub command shows warnings about missing tokens:**
+- Ensure environment variables are set: `GITHUB_TOKEN_ASSISTANT_MONDOOHQ` and `GITHUB_TOKEN_ASSISTANT_MONDOO_COMMUNITY`
+- Add exports to your shell profile for persistence
+- Verify tokens have correct scopes: `repo`, `read:org`
+
+**No results shown for assigned issues or mentions:**
+- Verify you have access to the organizations (mondoohq, mondoo-community)
+- Check that you actually have issues assigned or mentions in these orgs
+- Try running `gh auth status` to verify authentication
+
+**Error: "gh: command not found":**
+- Install GitHub CLI: `brew install gh` (macOS) or see [cli.github.com](https://cli.github.com/)
 
 ## Future Enhancements
 

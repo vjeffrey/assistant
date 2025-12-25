@@ -203,3 +203,93 @@ func (c *CLI) ListEntries(category string) error {
 
 	return nil
 }
+
+func (c *CLI) ShowGitHubAssignments() error {
+	gh := NewGitHubManager("vjeffrey")
+
+	fmt.Println("\n🔍 Fetching GitHub assignments...")
+
+	var allIssues []GitHubIssue
+	var allMentionedIssues []GitHubIssue
+	var allMentionedPRs []GitHubPR
+
+	// Define orgs and their token environment variables
+	orgTokens := map[string]string{
+		"mondoohq":         "GITHUB_TOKEN_ASSISTANT_MONDOOHQ",
+		"mondoo-community": "GITHUB_TOKEN_ASSISTANT_MONDOO_COMMUNITY",
+	}
+
+	// Fetch data for each org with its specific token
+	for org, tokenEnv := range orgTokens {
+		token := os.Getenv(tokenEnv)
+		if token == "" {
+			fmt.Printf("⚠️  Warning: %s not set, skipping %s\n", tokenEnv, org)
+			continue
+		}
+
+		// cmd := exec.Command("echo", token, "|", "gh", "auth", "login", "--with-token")
+		// _, err := cmd.Output()
+		// if err != nil {
+		// 	fmt.Printf("⚠️  Warning: failed to login %s", err.Error())
+		// 	return err
+		// }
+		// Get assigned issues for this org
+		issues, err := gh.GetAssignedIssues(org, token)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: Failed to fetch issues from %s: %v\n", org, err)
+		} else {
+			allIssues = append(allIssues, issues...)
+		}
+
+		// Get mentions for this org
+		mentionedIssues, mentionedPRs, err := gh.GetMentionedIssuesAndPRs(org, token)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: Failed to fetch mentions from %s: %v\n", org, err)
+		} else {
+			allMentionedIssues = append(allMentionedIssues, mentionedIssues...)
+			allMentionedPRs = append(allMentionedPRs, mentionedPRs...)
+		}
+	}
+
+	// Display assigned issues
+	fmt.Println("\n📋 Issues assigned to vjeffrey:")
+	fmt.Println(strings.Repeat("=", 80))
+	fmt.Println(FormatIssues(allIssues))
+	fmt.Printf("\nTotal: %d issue(s)\n", len(allIssues))
+
+	// Display mentioned issues and PRs
+	// fmt.Println("\n💬 Issues and PRs mentioning vjeffrey:")
+	// fmt.Println(strings.Repeat("=", 80))
+
+	// if len(allMentionedIssues) > 0 {
+	// 	fmt.Println("\nIssues:")
+	// 	fmt.Println(FormatIssues(allMentionedIssues))
+	// }
+
+	// if len(allMentionedPRs) > 0 {
+	// 	fmt.Println("\nPull Requests:")
+	// 	fmt.Println(FormatPRs(allMentionedPRs))
+	// }
+
+	// fmt.Printf("\nTotal: %d issue(s) and %d PR(s)\n", len(allMentionedIssues), len(allMentionedPRs))
+
+	// Get recently merged PRs (use mondoohq token for these repos)
+	fmt.Println("\n✅ Recently merged PRs (last 12 hours):")
+	fmt.Println(strings.Repeat("=", 80))
+
+	mondoohqToken := os.Getenv("GITHUB_TOKEN_ASSISTANT_MONDOOHQ")
+	if mondoohqToken != "" {
+		repos := []string{"mondoohq/server", "mondoohq/console", "mondoohq/test-metrics-bigquery"}
+		recentPRs, err := gh.GetRecentMergedPRs(repos, 12, mondoohqToken)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: Failed to fetch recent merged PRs: %v\n", err)
+		} else {
+			fmt.Println(FormatPRs(recentPRs))
+			fmt.Printf("\nTotal: %d PR(s) merged in the last 12 hours\n", len(recentPRs))
+		}
+	} else {
+		fmt.Println("⚠️  GITHUB_TOKEN_ASSISTANT_MONDOOHQ not set, skipping recent PRs")
+	}
+
+	return nil
+}

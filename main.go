@@ -16,6 +16,7 @@ func main() {
 	list := flag.String("list", "", "List entries for: journal, exercise, or reminders")
 	questions := flag.Bool("questions", false, "Run the daily questions interactively")
 	morning := flag.Bool("morning", false, "Run the morning question about daily focus")
+	github := flag.Bool("github", false, "Show GitHub assignments, mentions, and recent merges")
 
 	flag.Parse()
 
@@ -25,6 +26,15 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
+
+	// GitHub mode
+	if *github {
+		cli := NewCLI(db)
+		if err := cli.ShowGitHubAssignments(); err != nil {
+			log.Fatalf("Error fetching GitHub assignments: %v", err)
+		}
+		return
+	}
 
 	// List mode
 	if *list != "" {
@@ -65,6 +75,7 @@ func main() {
 	fmt.Println("  assistant --daemon          Run in background with scheduled notifications")
 	fmt.Println("  assistant --questions       Answer daily questions (journal, exercise, symptoms, reminders)")
 	fmt.Println("  assistant --morning         Answer morning question about daily focus")
+	fmt.Println("  assistant --github          Show GitHub assignments, mentions, and recent merges")
 	fmt.Println("  assistant --list journal    List all journal entries")
 	fmt.Println("  assistant --list exercise   List all exercise entries")
 	fmt.Println("  assistant --list symptoms   List all symptom entries")
