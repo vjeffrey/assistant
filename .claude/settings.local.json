@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(./assistant)",
+      "Bash(CGO_ENABLED=1 go build:*)",
+      "Bash(./assistant --list:*)",
+      "Bash(chmod:*)"
+    ]
+  }
+}
