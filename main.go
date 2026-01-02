@@ -31,8 +31,8 @@ func main() {
 	}
 	defer db.Close()
 
-	// Web UI mode
-	if *web != "" {
+	// Web UI mode (unless daemon mode is also enabled)
+	if *web != "" && !*daemon {
 		server := NewWebServer(db)
 		if err := server.Start(*web); err != nil {
 			log.Fatalf("Failed to start web server: %v", err)
@@ -79,7 +79,7 @@ func main() {
 
 	// Daemon mode
 	if *daemon {
-		runDaemon(db)
+		runDaemon(db, *web)
 		return
 	}
 
@@ -87,6 +87,7 @@ func main() {
 	fmt.Println("Daily Assistant")
 	fmt.Println("\nUsage:")
 	fmt.Println("  assistant --daemon                              Run in background with scheduled notifications")
+	fmt.Println("  assistant --daemon --web 8080                   Run daemon with web UI on port 8080")
 	fmt.Println("  assistant --questions                           Answer daily questions (journal, exercise, symptoms, reminders)")
 	fmt.Println("  assistant --morning                             Answer morning question about daily focus")
 	fmt.Println("  assistant --github                              Show GitHub assignments, mentions, and recent merges")
@@ -107,7 +108,7 @@ func main() {
 	fmt.Println("  1:00 PM - Daily check-in questions")
 }
 
-func runDaemon(db *Database) {
+func runDaemon(db *Database, webPort string) {
 	// Setup logging
 	homeDir, _ := os.UserHomeDir()
 	logDir := filepath.Join(homeDir, ".assistant")
@@ -122,6 +123,17 @@ func runDaemon(db *Database) {
 	log.SetOutput(f)
 	log.Println("Starting Daily Assistant daemon...")
 
+	// Start web server if port is specified
+	if webPort != "" {
+		server := NewWebServer(db)
+		go func() {
+			log.Printf("Starting web server on port %s...\n", webPort)
+			if err := server.Start(webPort); err != nil {
+				log.Printf("Web server error: %v\n", err)
+			}
+		}()
+	}
+
 	// Start scheduler
 	scheduler := NewScheduler(db)
 	if err := scheduler.Start(); err != nil {
@@ -131,6 +143,9 @@ func runDaemon(db *Database) {
 
 	fmt.Println("Daily Assistant is now running in the background.")
 	fmt.Println("Logs are stored at:", logFile)
+	if webPort != "" {
+		fmt.Printf("\nWeb UI available at: http://localhost:%s\n", webPort)
+	}
 	fmt.Println("\nScheduled times:")
 	fmt.Println("  7:45 AM - Daily summary (run 'assistant --morning' to set daily focus)")
 	fmt.Println("  1:00 PM - Daily check-in (run 'assistant --questions' to respond)")

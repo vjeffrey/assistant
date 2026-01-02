@@ -262,6 +262,24 @@ const htmlTemplate = `
             color: #f85149;
             font-weight: 600;
         }
+        .label-badge {
+            background: #1f6feb;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            color: white;
+            margin-right: 5px;
+            display: inline-block;
+        }
+        .assignee-badge {
+            background: #6e7681;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            color: white;
+            margin-right: 5px;
+            display: inline-block;
+        }
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
@@ -313,6 +331,16 @@ const htmlTemplate = `
                     </div>
                     <div class="issue-meta">
                         <span class="meta-item repo-badge">{{.RepoName}}</span>
+                        {{if .Assignees}}
+                        <span class="meta-item">
+                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
+                        </span>
+                        {{end}}
+                        {{if .Labels}}
+                        <span class="meta-item">
+                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
+                        </span>
+                        {{end}}
                         {{if .ProjectStatus}}
                         <span class="meta-item status-badge">{{.ProjectStatus}}</span>
                         {{end}}
@@ -338,6 +366,16 @@ const htmlTemplate = `
                     </div>
                     <div class="issue-meta">
                         <span class="meta-item repo-badge">{{.RepoName}}</span>
+                        {{if .Assignees}}
+                        <span class="meta-item">
+                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
+                        </span>
+                        {{end}}
+                        {{if .Labels}}
+                        <span class="meta-item">
+                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
+                        </span>
+                        {{end}}
                         {{if .ProjectStatus}}
                         <span class="meta-item status-badge">{{.ProjectStatus}}</span>
                         {{end}}
@@ -364,6 +402,16 @@ const htmlTemplate = `
                     </div>
                     <div class="issue-meta">
                         <span class="meta-item repo-badge">{{.RepoName}}</span>
+                        {{if .Assignees}}
+                        <span class="meta-item">
+                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
+                        </span>
+                        {{end}}
+                        {{if .Labels}}
+                        <span class="meta-item">
+                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
+                        </span>
+                        {{end}}
                         <span class="meta-item">State: {{.State}}</span>
                         <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
                     </div>
@@ -384,6 +432,16 @@ const htmlTemplate = `
                     </div>
                     <div class="pr-meta">
                         <span class="meta-item repo-badge">{{.RepoName}}</span>
+                        {{if .Assignees}}
+                        <span class="meta-item">
+                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
+                        </span>
+                        {{end}}
+                        {{if .Labels}}
+                        <span class="meta-item">
+                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
+                        </span>
+                        {{end}}
                         <span class="meta-item">Merged: {{.MergedAt.Format "2006-01-02 15:04"}}</span>
                     </div>
                 </div>

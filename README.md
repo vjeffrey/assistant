@@ -61,15 +61,18 @@ After building, you'll have an `assistant` binary in the current directory.
 ### Command-line Options
 
 ```bash
-./assistant                    # Show help and usage information
-./assistant --daemon           # Run in background with scheduled notifications
-./assistant --questions        # Answer daily questions (journal, exercise, reminders)
-./assistant --morning          # Answer morning question about daily focus
-./assistant --github           # Show GitHub assignments, mentions, and recent merges
-./assistant --list journal     # List all journal entries
-./assistant --list exercise    # List all exercise entries
-./assistant --list reminders   # List all reminders
-./assistant --list symptoms    # List all symptom entries
+./assistant                       # Show help and usage information
+./assistant --daemon              # Run in background with scheduled notifications
+./assistant --daemon --web 8080   # Run daemon with web UI on port 8080
+./assistant --web 8080            # Start web UI server only (no daemon)
+./assistant --questions           # Answer daily questions (journal, exercise, reminders)
+./assistant --morning             # Answer morning question about daily focus
+./assistant --github              # Show GitHub assignments, mentions, and recent merges
+./assistant --merged              # Show recently merged PRs (last 12 hours)
+./assistant --list journal        # List all journal entries
+./assistant --list exercise       # List all exercise entries
+./assistant --list reminders      # List all reminders
+./assistant --list symptoms       # List all symptom entries
 ```
 
 ### Start the daemon (background service)
@@ -83,6 +86,28 @@ This will run continuously and send notifications at:
 - **1:00 PM** - Daily check-in for journal, exercise, and reminders
 
 Keep this running in a terminal or set it up as a system service (see below).
+
+### Web UI
+
+The assistant includes a lightweight web interface for viewing your GitHub assignments:
+
+```bash
+# Start web UI only
+./assistant --web 8080
+
+# Or combine with daemon mode to run both
+./assistant --daemon --web 8080
+```
+
+The web UI displays:
+- Project board issues (if `GITHUB_PROJECT` is set)
+- Stale issues (>3 weeks on board)
+- All assigned issues from configured organizations
+- Recently merged PRs (last 12 hours)
+- Real-time refresh capability
+- Labels and assignees for all issues and PRs
+
+Access it at `http://localhost:8080` in your browser.
 
 ### Respond to daily questions
 
@@ -293,7 +318,16 @@ Create `~/Library/LaunchAgents/io.mondoo.assistant.plist`:
     <array>
         <string>/Users/vj/go/bin/assistant</string>
         <string>--daemon</string>
+        <string>--web</string>
+        <string>8080</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>GITHUB_TOKEN_ASSISTANT_MONDOOHQ</key>
+        <string>your_token_here</string>
+        <key>GITHUB_PROJECT</key>
+        <string>PVT_your_project_id</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -331,7 +365,9 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=/path/to/assistant --daemon
+ExecStart=/path/to/assistant --daemon --web 8080
+Environment="GITHUB_TOKEN_ASSISTANT_MONDOOHQ=your_token_here"
+Environment="GITHUB_PROJECT=PVT_your_project_id"
 Restart=always
 
 [Install]
@@ -476,7 +512,8 @@ systemctl --user disable assistant
 ## Future Enhancements
 
 Potential features to add:
-- Web interface for viewing entries
+- ✅ ~~Web interface for viewing entries~~ (Implemented for GitHub data)
+- Extend web interface to show journal, exercise, and reminders
 - Export data to JSON/CSV
 - Recurring reminders (daily, weekly, monthly)
 - Rich text formatting for journal entries

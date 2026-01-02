@@ -14,6 +14,14 @@ type GitHubRepository struct {
 	NameWithOwner string `json:"nameWithOwner"`
 }
 
+type GitHubLabel struct {
+	Name string `json:"name"`
+}
+
+type GitHubUser struct {
+	Login string `json:"login"`
+}
+
 type GitHubIssue struct {
 	Number           int              `json:"number"`
 	Title            string           `json:"title"`
@@ -22,6 +30,8 @@ type GitHubIssue struct {
 	State            string           `json:"state"`
 	CreatedAt        time.Time        `json:"createdAt"`
 	UpdatedAt        time.Time        `json:"updatedAt"`
+	Labels           []GitHubLabel    `json:"labels"`
+	Assignees        []GitHubUser     `json:"assignees"`
 	RepoName         string           // Extracted repository name
 	AddedToProjectAt time.Time        // When the issue was added to a project
 	ProjectStatus    string           // Status field from project board
@@ -36,6 +46,8 @@ type GitHubPR struct {
 	MergedAt   time.Time        `json:"mergedAt"`
 	CreatedAt  time.Time        `json:"createdAt"`
 	UpdatedAt  time.Time        `json:"updatedAt"`
+	Labels     []GitHubLabel    `json:"labels"`
+	Assignees  []GitHubUser     `json:"assignees"`
 	RepoName   string           // Extracted repository name
 }
 
@@ -57,6 +69,11 @@ type ProjectItemContent struct {
 			Login string `json:"login"`
 		} `json:"nodes"`
 	} `json:"assignees"`
+	Labels struct {
+		Nodes []struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	} `json:"labels"`
 }
 
 // ProjectItem represents an item in a GitHub Project
@@ -151,6 +168,11 @@ func (g *GitHubManager) GetProjectItems(projectNodeID string, token string) ([]P
                   login
                 }
               }
+              labels(first: 20) {
+                nodes {
+                  name
+                }
+              }
             }
             ... on PullRequest {
               number
@@ -162,6 +184,11 @@ func (g *GitHubManager) GetProjectItems(projectNodeID string, token string) ([]P
               assignees(first: 10) {
                 nodes {
                   login
+                }
+              }
+              labels(first: 20) {
+                nodes {
+                  name
                 }
               }
             }
@@ -334,6 +361,18 @@ func (g *GitHubManager) GetProjectIssuesForUser(projectNodeID string, token stri
 			}
 		}
 
+		// Convert labels
+		var labels []GitHubLabel
+		for _, label := range item.Content.Labels.Nodes {
+			labels = append(labels, GitHubLabel{Name: label.Name})
+		}
+
+		// Convert assignees
+		var assignees []GitHubUser
+		for _, assignee := range item.Content.Assignees.Nodes {
+			assignees = append(assignees, GitHubUser{Login: assignee.Login})
+		}
+
 		issue := GitHubIssue{
 			Number:           item.Content.Number,
 			Title:            item.Content.Title,
@@ -341,6 +380,8 @@ func (g *GitHubManager) GetProjectIssuesForUser(projectNodeID string, token stri
 			State:            item.Content.State,
 			CreatedAt:        item.Content.CreatedAt,
 			UpdatedAt:        item.Content.UpdatedAt,
+			Labels:           labels,
+			Assignees:        assignees,
 			RepoName:         repoName,
 			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
 			ProjectStatus:    projectStatus,
@@ -408,6 +449,18 @@ func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string
 			}
 		}
 
+		// Convert labels
+		var labels []GitHubLabel
+		for _, label := range item.Content.Labels.Nodes {
+			labels = append(labels, GitHubLabel{Name: label.Name})
+		}
+
+		// Convert assignees
+		var assignees []GitHubUser
+		for _, assignee := range item.Content.Assignees.Nodes {
+			assignees = append(assignees, GitHubUser{Login: assignee.Login})
+		}
+
 		issue := GitHubIssue{
 			Number:           item.Content.Number,
 			Title:            item.Content.Title,
@@ -415,6 +468,8 @@ func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string
 			State:            item.Content.State,
 			CreatedAt:        item.Content.CreatedAt,
 			UpdatedAt:        item.Content.UpdatedAt,
+			Labels:           labels,
+			Assignees:        assignees,
 			RepoName:         repoName,
 			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
 			ProjectStatus:    projectStatus,
@@ -434,7 +489,7 @@ func (g *GitHubManager) GetAssignedIssues(org string, token string) ([]GitHubIss
 	// Pass each part of the query as separate arguments to avoid shell quoting issues
 	orgQuery := fmt.Sprintf("org:%s", org)
 	assigneeQuery := fmt.Sprintf("assignee:%s", g.username)
-	cmd := exec.Command("gh", "search", "issues", orgQuery, assigneeQuery, "is:issue", "is:open", "--json", "number,title,url,state,createdAt,updatedAt", "--limit", "100")
+	cmd := exec.Command("gh", "search", "issues", orgQuery, assigneeQuery, "is:issue", "is:open", "--json", "number,title,url,state,createdAt,updatedAt,labels,assignees", "--limit", "100")
 	cmd.Env = g.SetupGitHubToken(token, nil)
 
 	output, err := cmd.CombinedOutput()
@@ -470,7 +525,7 @@ func (g *GitHubManager) GetMentionedIssuesAndPRs(org string, token string) ([]Gi
 	// Search for issues mentioning the user
 	orgQuery := fmt.Sprintf("org:%s", org)
 	mentionsQuery := fmt.Sprintf("mentions:%s", g.username)
-	issueCmd := exec.Command("gh", "search", "issues", orgQuery, mentionsQuery, "is:issue", "--json", "number,title,url,state,createdAt,updatedAt", "--limit", "100")
+	issueCmd := exec.Command("gh", "search", "issues", orgQuery, mentionsQuery, "is:issue", "--json", "number,title,url,state,createdAt,updatedAt,labels,assignees", "--limit", "100")
 	issueCmd.Env = g.SetupGitHubToken(token, nil)
 
 	issueOutput, err := issueCmd.Output()
@@ -492,7 +547,7 @@ func (g *GitHubManager) GetMentionedIssuesAndPRs(org string, token string) ([]Gi
 	}
 
 	// Search for PRs mentioning the user
-	prCmd := exec.Command("gh", "search", "prs", orgQuery, mentionsQuery, "is:pr", "--json", "number,title,url,state,createdAt,updatedAt", "--limit", "100")
+	prCmd := exec.Command("gh", "search", "prs", orgQuery, mentionsQuery, "is:pr", "--json", "number,title,url,state,createdAt,updatedAt,labels,assignees", "--limit", "100")
 	prCmd.Env = g.SetupGitHubToken(token, nil)
 
 	prOutput, err := prCmd.Output()
@@ -525,7 +580,7 @@ func (g *GitHubManager) GetRecentMergedPRs(repos []string, hoursAgo int, token s
 		cmd := exec.Command("gh", "pr", "list",
 			"--repo", repo,
 			"--state", "merged",
-			"--json", "number,title,url,state,mergedAt,createdAt,updatedAt",
+			"--json", "number,title,url,state,mergedAt,createdAt,updatedAt,labels,assignees",
 			"--limit", "100",
 		)
 		cmd.Env = g.SetupGitHubToken(token, nil)
@@ -571,6 +626,24 @@ func FormatIssues(issues []GitHubIssue) string {
 		output.WriteString(fmt.Sprintf("  URL: %s\n", issue.URL))
 		output.WriteString(fmt.Sprintf("  State: %s\n", issue.State))
 
+		// Show assignees if available
+		if len(issue.Assignees) > 0 {
+			var assigneeNames []string
+			for _, assignee := range issue.Assignees {
+				assigneeNames = append(assigneeNames, assignee.Login)
+			}
+			output.WriteString(fmt.Sprintf("  Assignees: %s\n", strings.Join(assigneeNames, ", ")))
+		}
+
+		// Show labels if available
+		if len(issue.Labels) > 0 {
+			var labelNames []string
+			for _, label := range issue.Labels {
+				labelNames = append(labelNames, label.Name)
+			}
+			output.WriteString(fmt.Sprintf("  Labels: %s\n", strings.Join(labelNames, ", ")))
+		}
+
 		// Show project status if available
 		if issue.ProjectStatus != "" {
 			output.WriteString(fmt.Sprintf("  Project Status: %s\n", issue.ProjectStatus))
@@ -600,6 +673,25 @@ func FormatPRs(prs []GitHubPR) string {
 		output.WriteString(fmt.Sprintf("  Repository: %s\n", pr.RepoName))
 		output.WriteString(fmt.Sprintf("  URL: %s\n", pr.URL))
 		output.WriteString(fmt.Sprintf("  State: %s\n", pr.State))
+
+		// Show assignees if available
+		if len(pr.Assignees) > 0 {
+			var assigneeNames []string
+			for _, assignee := range pr.Assignees {
+				assigneeNames = append(assigneeNames, assignee.Login)
+			}
+			output.WriteString(fmt.Sprintf("  Assignees: %s\n", strings.Join(assigneeNames, ", ")))
+		}
+
+		// Show labels if available
+		if len(pr.Labels) > 0 {
+			var labelNames []string
+			for _, label := range pr.Labels {
+				labelNames = append(labelNames, label.Name)
+			}
+			output.WriteString(fmt.Sprintf("  Labels: %s\n", strings.Join(labelNames, ", ")))
+		}
+
 		if !pr.MergedAt.IsZero() {
 			output.WriteString(fmt.Sprintf("  Merged: %s\n", pr.MergedAt.Format("2006-01-02 15:04")))
 		} else {
