@@ -17,6 +17,8 @@ func main() {
 	questions := flag.Bool("questions", false, "Run the daily questions interactively")
 	morning := flag.Bool("morning", false, "Run the morning question about daily focus")
 	github := flag.Bool("github", false, "Show GitHub assignments, mentions, and recent merges")
+	merged := flag.Bool("merged", false, "Show recently merged PRs (last 12 hours)")
+	web := flag.String("web", "", "Start web UI server on specified port (e.g., --web 8080)")
 	githubStale := flag.Int("github-stale", 0, "Show issues on project board for more than N weeks (requires GITHUB_PROJECT env var)")
 	filterStatus := flag.String("filter-status", "", "Filter issues by status field value (e.g., '5-9 january')")
 
@@ -29,11 +31,20 @@ func main() {
 	}
 	defer db.Close()
 
+	// Web UI mode
+	if *web != "" {
+		server := NewWebServer(db)
+		if err := server.Start(*web); err != nil {
+			log.Fatalf("Failed to start web server: %v", err)
+		}
+		return
+	}
+
 	// GitHub mode
-	githubProjectEnv := os.Getenv("GITHUB_PROJECT")
-	if *github || githubProjectEnv != "" {
+	if *github || *merged {
 		cli := NewCLI(db)
-		if err := cli.ShowGitHubAssignmentsWithOptions(githubProjectEnv, *githubStale, *filterStatus); err != nil {
+		githubProjectEnv := os.Getenv("GITHUB_PROJECT")
+		if err := cli.ShowGitHubAssignmentsWithOptions(githubProjectEnv, *githubStale, *filterStatus, *merged); err != nil {
 			log.Fatalf("Error fetching GitHub assignments: %v", err)
 		}
 		return
@@ -79,9 +90,12 @@ func main() {
 	fmt.Println("  assistant --questions                           Answer daily questions (journal, exercise, symptoms, reminders)")
 	fmt.Println("  assistant --morning                             Answer morning question about daily focus")
 	fmt.Println("  assistant --github                              Show GitHub assignments, mentions, and recent merges")
+	fmt.Println("  assistant --merged                              Show recently merged PRs (last 12 hours)")
+	fmt.Println("  assistant --web 8080                            Start web UI server on port 8080")
 	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github     Show issues assigned to you on a specific project board")
 	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github --github-stale 3  Show issues on board for more than 3 weeks")
 	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github --filter-status '5-9 january'  Filter by status field value")
+	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --merged     Show recently merged PRs with project env var set")
 	fmt.Println("  assistant --list journal                        List all journal entries")
 	fmt.Println("  assistant --list exercise                       List all exercise entries")
 	fmt.Println("  assistant --list symptoms                       List all symptom entries")

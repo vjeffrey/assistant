@@ -24,6 +24,7 @@ type GitHubIssue struct {
 	UpdatedAt        time.Time        `json:"updatedAt"`
 	RepoName         string           // Extracted repository name
 	AddedToProjectAt time.Time        // When the issue was added to a project
+	ProjectStatus    string           // Status field from project board
 }
 
 type GitHubPR struct {
@@ -324,6 +325,15 @@ func (g *GitHubManager) GetProjectIssuesForUser(projectNodeID string, token stri
 			repoName = parts[3] + "/" + parts[4]
 		}
 
+		// Extract project status
+		projectStatus := ""
+		for _, fieldValue := range item.FieldValues.Nodes {
+			if fieldValue.Type == "ProjectV2ItemFieldSingleSelectValue" && fieldValue.Field.Name == "Status" {
+				projectStatus = fieldValue.Name
+				break
+			}
+		}
+
 		issue := GitHubIssue{
 			Number:           item.Content.Number,
 			Title:            item.Content.Title,
@@ -333,6 +343,7 @@ func (g *GitHubManager) GetProjectIssuesForUser(projectNodeID string, token stri
 			UpdatedAt:        item.Content.UpdatedAt,
 			RepoName:         repoName,
 			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
+			ProjectStatus:    projectStatus,
 		}
 
 		issues = append(issues, issue)
@@ -388,6 +399,15 @@ func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string
 			repoName = parts[3] + "/" + parts[4]
 		}
 
+		// Extract project status
+		projectStatus := ""
+		for _, fieldValue := range item.FieldValues.Nodes {
+			if fieldValue.Type == "ProjectV2ItemFieldSingleSelectValue" && fieldValue.Field.Name == "Status" {
+				projectStatus = fieldValue.Name
+				break
+			}
+		}
+
 		issue := GitHubIssue{
 			Number:           item.Content.Number,
 			Title:            item.Content.Title,
@@ -397,6 +417,7 @@ func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string
 			UpdatedAt:        item.Content.UpdatedAt,
 			RepoName:         repoName,
 			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
+			ProjectStatus:    projectStatus,
 		}
 
 		staleIssues = append(staleIssues, issue)
@@ -549,6 +570,12 @@ func FormatIssues(issues []GitHubIssue) string {
 		output.WriteString(fmt.Sprintf("  Repository: %s\n", issue.RepoName))
 		output.WriteString(fmt.Sprintf("  URL: %s\n", issue.URL))
 		output.WriteString(fmt.Sprintf("  State: %s\n", issue.State))
+
+		// Show project status if available
+		if issue.ProjectStatus != "" {
+			output.WriteString(fmt.Sprintf("  Project Status: %s\n", issue.ProjectStatus))
+		}
+
 		output.WriteString(fmt.Sprintf("  Updated: %s\n", issue.UpdatedAt.Format("2006-01-02 15:04")))
 
 		// Show time on board if available

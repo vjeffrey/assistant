@@ -205,10 +205,10 @@ func (c *CLI) ListEntries(category string) error {
 }
 
 func (c *CLI) ShowGitHubAssignments() error {
-	return c.ShowGitHubAssignmentsWithOptions("", 0, "")
+	return c.ShowGitHubAssignmentsWithOptions("", 0, "", false)
 }
 
-func (c *CLI) ShowGitHubAssignmentsWithOptions(projectNodeID string, staleThresholdWeeks int, filterStatus string) error {
+func (c *CLI) ShowGitHubAssignmentsWithOptions(projectNodeID string, staleThresholdWeeks int, filterStatus string, showMergedOnly bool) error {
 	gh := NewGitHubManager("vjeffrey")
 
 	fmt.Println("\n🔍 Fetching GitHub assignments...")
@@ -216,6 +216,22 @@ func (c *CLI) ShowGitHubAssignmentsWithOptions(projectNodeID string, staleThresh
 	mondoohqToken := os.Getenv("GITHUB_TOKEN_ASSISTANT_MONDOOHQ")
 	if mondoohqToken == "" {
 		return fmt.Errorf("GITHUB_TOKEN_ASSISTANT_MONDOOHQ not set")
+	}
+
+	// If only merged PRs are requested
+	if showMergedOnly {
+		fmt.Println("\n✅ Recently merged PRs (last 12 hours):")
+		fmt.Println(strings.Repeat("=", 80))
+
+		repos := []string{"mondoohq/server", "mondoohq/console", "mondoohq/test-metrics-bigquery"}
+		recentPRs, err := gh.GetRecentMergedPRs(repos, 12, mondoohqToken)
+		if err != nil {
+			return fmt.Errorf("failed to fetch recent merged PRs: %w", err)
+		}
+		fmt.Println(FormatPRs(recentPRs))
+		fmt.Printf("\nTotal: %d PR(s) merged in the last 12 hours\n", len(recentPRs))
+
+		return nil
 	}
 
 	// If project filtering is requested

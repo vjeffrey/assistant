@@ -80,7 +80,15 @@ This project uses SQLite and requires CGO:
 CGO_ENABLED=1 go build
 ```
 
-Without CGO enabled, you'll get an error: "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work."
+**Important Notes:**
+- Without CGO enabled, you'll get an error: "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work."
+- On macOS, XProtect may aggressively quarantine or delete CGO-enabled binaries built in the current directory
+- **Recommended workaround**: Use `go install` instead:
+  ```bash
+  CGO_ENABLED=1 go install
+  # Binary will be at ~/go/bin/assistant
+  ```
+- The `build.sh` script is provided for local builds, but binaries may be removed by macOS security on execution
 
 ## GitHub Projects v2 Integration
 
@@ -136,7 +144,7 @@ The tool now supports filtering GitHub issues by project board and identifying s
 The project node ID is read from the `GITHUB_PROJECT` environment variable:
 
 ```bash
-# View issues on project board
+# View issues on project board (CLI)
 GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github
 
 # View stale issues (>3 weeks on board)
@@ -145,10 +153,20 @@ GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github --github-stale 3
 # Filter by status field
 GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github --filter-status '5-9 january'
 
+# View recently merged PRs only (works with or without GITHUB_PROJECT set)
+./assistant --merged
+GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --merged
+
+# Start web UI (opens on http://localhost:8080)
+./assistant --web 8080
+GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --web 8080
+
 # Or set it in your environment
 export GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8
 ./assistant --github
 ./assistant --github --github-stale 3
+./assistant --merged
+./assistant --web 8080
 ```
 
 ### Common Errors
@@ -167,10 +185,42 @@ export GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8
   - When set, the `--github` flag will filter issues to this project board
   - Replaces the previous `--github-project` command-line flag
 
+### Web UI
+
+A lightweight web interface is available for easier viewing of GitHub data:
+
+**Features:**
+- Clickable issue/PR links that open in new tabs
+- Dark theme matching GitHub's UI
+- Real-time refresh capability
+- Displays project status for board issues
+- Shows time on board for project items
+- Responsive layout with proper sectioning
+
+**Usage:**
+```bash
+./assistant --web 8080
+# Opens at http://localhost:8080
+```
+
+The web UI automatically displays:
+- Project board issues (if `GITHUB_PROJECT` is set)
+- Stale issues (>3 weeks on board)
+- All assigned issues from configured orgs
+- Recently merged PRs (last 12 hours)
+
+### Output Enhancements
+
+**Project Status Display:**
+- When viewing project board issues, the status field is now displayed in both CLI and web UI
+- Status is extracted from the Project's "Status" field (single-select field type)
+- Shows alongside other issue metadata like repository, state, and time on board
+
 ### Files Added/Modified
 
-- `github.go`: Added `ProjectV2`, `ProjectItem` structs and query functions
-- `cli.go`: Added `ShowGitHubAssignmentsWithOptions()` for project filtering
-- `main.go`: Changed from `--github-project` flag to `GITHUB_PROJECT` env var
+- `github.go`: Added `ProjectV2`, `ProjectItem` structs, query functions, and `ProjectStatus` field
+- `cli.go`: Added `ShowGitHubAssignmentsWithOptions()` for project filtering with `--merged` flag
+- `main.go`: Changed from `--github-project` flag to `GITHUB_PROJECT` env var, added `--web` and `--merged` flags
+- `web.go`: New file - lightweight web UI with HTML templates and HTTP server
 - `get-project-id.sh`: Helper script to retrieve project node IDs
 - `GITHUB_PROJECTS.md`: Comprehensive documentation
