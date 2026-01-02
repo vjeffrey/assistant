@@ -185,12 +185,44 @@ const htmlTemplate = `
             border-radius: 6px;
             margin-bottom: 20px;
         }
-        .section {
+        .tabs {
+            display: flex;
+            gap: 0;
+            background: #161b22;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #30363d;
+            border-bottom: none;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            background: transparent;
+            color: #8b949e;
+            border: none;
+            border-bottom: 2px solid transparent;
+            font-size: 1em;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            color: #c9d1d9;
+            background: #21262d;
+        }
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+            background: #0d1117;
+        }
+        .tab-content {
+            display: none;
             background: #161b22;
             padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
+            border-radius: 0 0 8px 8px;
             border: 1px solid #30363d;
+        }
+        .tab-content.active {
+            display: block;
         }
         .section h2 {
             color: #58a6ff;
@@ -320,9 +352,33 @@ const htmlTemplate = `
         <div class="error">⚠️ Error: {{.Error}}</div>
         {{end}}
 
+        <div class="tabs">
+            {{if .ProjectName}}
+            <button class="tab active" onclick="switchTab(event, 'project-board')">
+                📊 Project Board <span class="badge badge-count">{{len .ProjectIssues}}</span>
+            </button>
+            <button class="tab" onclick="switchTab(event, 'stale-issues')">
+                ⏰ Stale Issues <span class="badge badge-count">{{len .StaleIssues}}</span>
+            </button>
+            <button class="tab" onclick="switchTab(event, 'all-issues')">
+                📋 All Issues <span class="badge badge-count">{{len .AssignedIssues}}</span>
+            </button>
+            <button class="tab" onclick="switchTab(event, 'recent-prs')">
+                ✅ Recent PRs <span class="badge badge-count">{{len .RecentPRs}}</span>
+            </button>
+            {{else}}
+            <button class="tab active" onclick="switchTab(event, 'all-issues')">
+                📋 All Issues <span class="badge badge-count">{{len .AssignedIssues}}</span>
+            </button>
+            <button class="tab" onclick="switchTab(event, 'recent-prs')">
+                ✅ Recent PRs <span class="badge badge-count">{{len .RecentPRs}}</span>
+            </button>
+            {{end}}
+        </div>
+
         {{if .ProjectName}}
-        <div class="section">
-            <h2>📊 Project Board Issues <span class="badge badge-count">{{len .ProjectIssues}}</span></h2>
+        <div id="project-board" class="tab-content active">
+            <h2>📊 Project Board Issues</h2>
             {{if .ProjectIssues}}
                 {{range .ProjectIssues}}
                 <div class="issue">
@@ -356,8 +412,8 @@ const htmlTemplate = `
             {{end}}
         </div>
 
-        <div class="section">
-            <h2>⏰ Stale Issues (>3 weeks) <span class="badge badge-count">{{len .StaleIssues}}</span></h2>
+        <div id="stale-issues" class="tab-content">
+            <h2>⏰ Stale Issues (>3 weeks)</h2>
             {{if .StaleIssues}}
                 {{range .StaleIssues}}
                 <div class="issue">
@@ -392,8 +448,8 @@ const htmlTemplate = `
         </div>
         {{end}}
 
-        <div class="section">
-            <h2>📋 All Assigned Issues <span class="badge badge-count">{{len .AssignedIssues}}</span></h2>
+        <div id="all-issues" class="tab-content{{if not .ProjectName}} active{{end}}">
+            <h2>📋 All Assigned Issues</h2>
             {{if .AssignedIssues}}
                 {{range .AssignedIssues}}
                 <div class="issue">
@@ -422,8 +478,8 @@ const htmlTemplate = `
             {{end}}
         </div>
 
-        <div class="section">
-            <h2>✅ Recently Merged PRs (12h) <span class="badge badge-count">{{len .RecentPRs}}</span></h2>
+        <div id="recent-prs" class="tab-content">
+            <h2>✅ Recently Merged PRs (12h)</h2>
             {{if .RecentPRs}}
                 {{range .RecentPRs}}
                 <div class="pr">
@@ -453,6 +509,26 @@ const htmlTemplate = `
     </div>
 
     <script>
+        function switchTab(event, tabId) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show the selected tab content
+            document.getElementById(tabId).classList.add('active');
+
+            // Add active class to the clicked tab
+            event.currentTarget.classList.add('active');
+        }
+
         // Helper function to calculate days on board
         function daysOnBoard(date) {
             const now = new Date();
