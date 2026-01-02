@@ -73,7 +73,9 @@
       "Bash(./debugapp:*)",
       "Bash(./newassistant --list:*)",
       "Bash(./myassistant:*)",
-      "Bash(else echo \"GITHUB_TOKEN_ASSISTANT_MONDOOHQ is NOT set\")"
+      "Bash(else echo \"GITHUB_TOKEN_ASSISTANT_MONDOOHQ is NOT set\")",
+      "Bash(make check-creds:*)",
+      "Bash(make:*)"
     ]
   }
 }

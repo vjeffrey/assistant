@@ -47,14 +47,36 @@ The assistant sends desktop notifications at specific times each day and provide
 ### Build
 
 ```bash
-# SQLite requires CGO to be enabled
-CGO_ENABLED=1 go build -o assistant
+# Using Make (recommended)
+make build
 
-# Or use the provided build script
+# Or using the build script directly
 ./build.sh
+
+# Or manually with Go
+CGO_ENABLED=1 go build -o assistant
 ```
 
 After building, you'll have an `assistant` binary in the current directory.
+
+#### Makefile Commands
+
+The project includes a Makefile with helpful commands:
+
+```bash
+make build           # Build the assistant binary
+make install         # Install to ~/go/bin/assistant
+make clean           # Remove build artifacts
+make fmt             # Format Go code
+make lint            # Run golangci-lint
+make test            # Run tests
+make check-creds     # Check for accidentally committed credentials
+make pre-commit      # Run all checks before committing (creds, fmt, test)
+make run-daemon      # Build and run daemon
+make run-web         # Build and run web UI on port 8080
+make run-daemon-web  # Build and run daemon with web UI
+make help            # Show all available commands
+```
 
 ## Usage
 
@@ -465,6 +487,61 @@ systemctl --user disable assistant
 - **CGO is required** because SQLite needs C bindings
 - **Daily focus is temporary** - it only reminds you on the day you set it
 - **GitHub integration** requires GitHub CLI (`gh`) and organization-specific tokens set as environment variables
+
+## Security Best Practices
+
+### Protecting Credentials
+
+This project includes tools to help prevent accidentally committing credentials:
+
+1. **Check for credentials before committing**:
+   ```bash
+   make check-creds
+   ```
+
+   This script checks for:
+   - GitHub tokens (ghp_, gho_, ghs_, etc.)
+   - AWS credentials
+   - Private keys
+   - API keys and tokens
+   - Database connection strings
+   - Hardcoded passwords
+
+2. **Run pre-commit checks**:
+   ```bash
+   make pre-commit
+   ```
+
+   This runs credential checks, code formatting, and tests.
+
+3. **Use environment variables** (never hardcode):
+   ```bash
+   export GITHUB_TOKEN_ASSISTANT_MONDOOHQ="ghp_your_token"
+   ```
+
+   Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) but **never commit them**.
+
+4. **Rotate tokens immediately** if accidentally committed:
+   - Go to [GitHub Settings > Tokens](https://github.com/settings/tokens)
+   - Delete the exposed token
+   - Generate a new one
+   - Update your environment variables
+
+### Setting Up Git Hooks (Optional)
+
+For automated checking, you can set up a pre-commit hook:
+
+```bash
+# Create pre-commit hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+make check-creds
+EOF
+
+chmod +x .git/hooks/pre-commit
+```
+
+This will automatically check for credentials before every commit.
 
 ## Troubleshooting
 

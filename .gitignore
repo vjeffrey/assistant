@@ -37,3 +37,11 @@ go.work.sum
 *credentials*
 *secret*
 *token*
+
+# Build artifacts
+.assistant.tmp
+newassistant
+myassistant
+debugapp
+simpleapp
+testbin
