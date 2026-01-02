@@ -127,13 +127,22 @@ Entries are displayed in reverse chronological order (newest first).
 Track your GitHub work across multiple organizations:
 
 ```bash
+# Show all assigned issues and recent merges
 ./assistant --github
+
+# Show only issues on a specific project board
+./assistant --github-project PVT_kwDOABpK8s4ApRn8
+
+# Show issues on a project board that have been there for more than 3 weeks
+./assistant --github-project PVT_kwDOABpK8s4ApRn8 --github-stale 3
 ```
 
 This command displays:
 - **Assigned Issues**: All issues assigned to you in `mondoohq` and `mondoo-community` organizations
-- **Mentions**: Issues and PRs where you've been mentioned
-- **Recent Merges**: PRs merged in the last 12 hours in key repositories (server, console, test-metrics-bigquery)
+- **Project Board Issues**: Filter to issues on a specific GitHub Project v2 board
+- **Stale Issues**: Identify issues that have been on a project board for longer than a threshold
+- **Mentions**: Issues and PRs where you've been mentioned (when using `--github` without project filtering)
+- **Recent Merges**: PRs merged in the last 12 hours in key repositories (when using `--github` without project filtering)
 
 #### Setup
 
@@ -156,8 +165,32 @@ The GitHub integration requires GitHub CLI (`gh`) and organization-specific acce
 
 3. **Token Requirements**:
    - Create personal access tokens at [github.com/settings/tokens](https://github.com/settings/tokens)
-   - Required scopes: `repo`, `read:org` (for private repositories)
+   - Required scopes:
+     - `repo`, `read:org` (for private repositories and issue search)
+     - `project` (for GitHub Projects v2 queries - required for `--github-project`)
    - Use separate tokens for each organization if they have different access requirements
+   - To add the `project` scope to an existing token: `gh auth refresh -s project`
+
+4. **Get Project Node ID**:
+
+   To use the `--github-project` flag, you need the GraphQL node ID of the project. You can get this using the provided helper script:
+
+   ```bash
+   # First, ensure your token has the 'project' scope
+   gh auth refresh -s project
+
+   # Then get the project ID (project number 14 from URL https://github.com/orgs/mondoohq/projects/14)
+   ./get-project-id.sh mondoohq 14
+   ```
+
+   This will output something like:
+   ```
+   Project ID: PVT_kwDOABpK8s4ApRn8
+   Title: Engineering Sprint Board
+   URL: https://github.com/orgs/mondoohq/projects/14
+   ```
+
+   Use the Project ID with the `--github-project` flag.
 
 #### Example Output
 
@@ -258,7 +291,7 @@ Create `~/Library/LaunchAgents/io.mondoo.assistant.plist`:
     <string>io.mondoo.assistant</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/vj/go/src/go.mondoo.io/assistant/assistant</string>
+        <string>/Users/vj/go/bin/assistant</string>
         <string>--daemon</string>
     </array>
     <key>RunAtLoad</key>

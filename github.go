@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,14 +15,15 @@ type GitHubRepository struct {
 }
 
 type GitHubIssue struct {
-	Number     int              `json:"number"`
-	Title      string           `json:"title"`
-	Repository GitHubRepository `json:"repository"`
-	URL        string           `json:"url"`
-	State      string           `json:"state"`
-	CreatedAt  time.Time        `json:"createdAt"`
-	UpdatedAt  time.Time        `json:"updatedAt"`
-	RepoName   string           // Extracted repository name
+	Number           int              `json:"number"`
+	Title            string           `json:"title"`
+	Repository       GitHubRepository `json:"repository"`
+	URL              string           `json:"url"`
+	State            string           `json:"state"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
+	RepoName         string           // Extracted repository name
+	AddedToProjectAt time.Time        // When the issue was added to a project
 }
 
 type GitHubPR struct {
@@ -40,6 +42,57 @@ type GitHubManager struct {
 	username string
 }
 
+// ProjectItemContent represents the content of a project item (issue or PR)
+type ProjectItemContent struct {
+	Type      string    `json:"__typename"`
+	Number    int       `json:"number"`
+	Title     string    `json:"title"`
+	URL       string    `json:"url"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	State     string    `json:"state"`
+	Assignees struct {
+		Nodes []struct {
+			Login string `json:"login"`
+		} `json:"nodes"`
+	} `json:"assignees"`
+}
+
+// ProjectItem represents an item in a GitHub Project
+type ProjectItem struct {
+	ID          string             `json:"id"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
+	Content     ProjectItemContent `json:"content"`
+	FieldValues struct {
+		Nodes []ProjectFieldValue `json:"nodes"`
+	} `json:"fieldValues"`
+}
+
+// ProjectFieldValue represents a custom field value in a project
+type ProjectFieldValue struct {
+	Type  string `json:"__typename"`
+	Date  string `json:"date,omitempty"` // Date string in YYYY-MM-DD format
+	Text  string `json:"text,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Field struct {
+		Name string `json:"name"`
+	} `json:"field"`
+}
+
+// ProjectV2 represents a GitHub Project v2
+type ProjectV2 struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Items struct {
+		Nodes    []ProjectItem `json:"nodes"`
+		PageInfo struct {
+			HasNextPage bool   `json:"hasNextPage"`
+			EndCursor   string `json:"endCursor"`
+		} `json:"pageInfo"`
+	} `json:"items"`
+}
+
 func NewGitHubManager(username string) *GitHubManager {
 	return &GitHubManager{username: username}
 }
@@ -54,6 +107,302 @@ func (g *GitHubManager) SetupGitHubToken(token string, cmdEnv []string) []string
 		cmdEnv = os.Environ()
 	}
 	return append(cmdEnv, "GH_TOKEN="+token)
+}
+
+// GetProjectItems fetches all items from a GitHub Project v2
+// projectNodeID is the GraphQL node ID of the project (format: PVT_...)
+// This requires the token to have 'project' scope
+func (g *GitHubManager) GetProjectItems(projectNodeID string, token string) ([]ProjectItem, error) {
+	var allItems []ProjectItem
+	cursor := ""
+	hasNextPage := true
+
+	for hasNextPage {
+		// Build the GraphQL query
+		afterClause := ""
+		if cursor != "" {
+			afterClause = fmt.Sprintf(`, after: "%s"`, cursor)
+		}
+
+		query := fmt.Sprintf(`{
+  node(id: "%s") {
+    ... on ProjectV2 {
+      items(first: 100%s) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          createdAt
+          updatedAt
+          content {
+            __typename
+            ... on Issue {
+              number
+              title
+              url
+              state
+              createdAt
+              updatedAt
+              assignees(first: 10) {
+                nodes {
+                  login
+                }
+              }
+            }
+            ... on PullRequest {
+              number
+              title
+              url
+              state
+              createdAt
+              updatedAt
+              assignees(first: 10) {
+                nodes {
+                  login
+                }
+              }
+            }
+          }
+          fieldValues(first: 20) {
+            nodes {
+              __typename
+              ... on ProjectV2ItemFieldDateValue {
+                date
+                field {
+                  ... on ProjectV2Field {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldTextValue {
+                text
+                field {
+                  ... on ProjectV2Field {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field {
+                  ... on ProjectV2Field {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`, projectNodeID, afterClause)
+
+		cmd := exec.Command("gh", "api", "graphql", "-f", fmt.Sprintf("query=%s", query))
+		cmd.Env = g.SetupGitHubToken(token, nil)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("failed to query project: %w (output: %s)", err, string(output))
+		}
+
+		// Parse the response
+		var response struct {
+			Data struct {
+				Node ProjectV2 `json:"node"`
+			} `json:"data"`
+			Errors []struct {
+				Message string `json:"message"`
+			} `json:"errors"`
+		}
+
+		if err := json.Unmarshal(output, &response); err != nil {
+			return nil, fmt.Errorf("failed to parse project response: %w", err)
+		}
+
+		if len(response.Errors) > 0 {
+			return nil, fmt.Errorf("GraphQL error: %s", response.Errors[0].Message)
+		}
+
+		allItems = append(allItems, response.Data.Node.Items.Nodes...)
+		hasNextPage = response.Data.Node.Items.PageInfo.HasNextPage
+		cursor = response.Data.Node.Items.PageInfo.EndCursor
+	}
+
+	return allItems, nil
+}
+
+// hasExcludedStatus checks if an item has a status that should be excluded
+func hasExcludedStatus(item ProjectItem) bool {
+	excludedStatuses := []string{
+		"set for development",
+		"needs code review",
+		"waiting for customer feedback",
+		"customer reported",
+	}
+
+	// Look for Status field in field values
+	for _, fieldValue := range item.FieldValues.Nodes {
+		if fieldValue.Type == "ProjectV2ItemFieldSingleSelectValue" {
+			statusValue := strings.ToLower(fieldValue.Name)
+			return slices.Contains(excludedStatuses, statusValue)
+		}
+	}
+	return false
+}
+
+// hasMatchingStatus checks if an item has a status that matches the filter
+// Returns true if the item has a status field matching the provided filterStatus (case-insensitive)
+// If filterStatus is empty, always returns true (no filtering)
+func hasMatchingStatus(item ProjectItem, filterStatus string) bool {
+	if filterStatus == "" {
+		return true
+	}
+
+	filterStatusLower := strings.ToLower(filterStatus)
+
+	// Look for Status field in field values
+	for _, fieldValue := range item.FieldValues.Nodes {
+		if fieldValue.Type == "ProjectV2ItemFieldSingleSelectValue" {
+			statusValue := strings.ToLower(fieldValue.Name)
+			if statusValue == filterStatusLower {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetProjectIssuesForUser filters project items to only include issues assigned to the specified user
+func (g *GitHubManager) GetProjectIssuesForUser(projectNodeID string, token string, filterStatus string) ([]GitHubIssue, error) {
+	items, err := g.GetProjectItems(projectNodeID, token)
+	if err != nil {
+		return nil, err
+	}
+
+	var issues []GitHubIssue
+	for _, item := range items {
+		// Skip if not an Issue
+		if item.Content.Type != "Issue" {
+			continue
+		}
+
+		// Skip closed issues
+		if strings.ToUpper(item.Content.State) == "CLOSED" {
+			continue
+		}
+
+		// Skip issues with excluded statuses
+		if hasExcludedStatus(item) {
+			continue
+		}
+
+		// Filter by status if specified
+		if !hasMatchingStatus(item, filterStatus) {
+			continue
+		}
+
+		// Check if user is assigned
+		isAssigned := false
+		for _, assignee := range item.Content.Assignees.Nodes {
+			if assignee.Login == g.username {
+				isAssigned = true
+				break
+			}
+		}
+
+		if !isAssigned {
+			continue
+		}
+
+		// Extract repository name from URL
+		repoName := ""
+		parts := strings.Split(item.Content.URL, "/")
+		if len(parts) >= 5 {
+			repoName = parts[3] + "/" + parts[4]
+		}
+
+		issue := GitHubIssue{
+			Number:           item.Content.Number,
+			Title:            item.Content.Title,
+			URL:              item.Content.URL,
+			State:            item.Content.State,
+			CreatedAt:        item.Content.CreatedAt,
+			UpdatedAt:        item.Content.UpdatedAt,
+			RepoName:         repoName,
+			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
+		}
+
+		issues = append(issues, issue)
+	}
+
+	return issues, nil
+}
+
+// GetStaleProjectIssues returns issues that have been on the project board for more than the specified duration
+// This includes ALL issues (not just those assigned to the user)
+func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string, staleDuration time.Duration, filterStatus string) ([]GitHubIssue, error) {
+	items, err := g.GetProjectItems(projectNodeID, token)
+	if err != nil {
+		return nil, err
+	}
+
+	var staleIssues []GitHubIssue
+	now := time.Now()
+
+	for _, item := range items {
+		// Skip if not an Issue
+		if item.Content.Type != "Issue" {
+			continue
+		}
+
+		// Skip closed issues
+		if strings.ToUpper(item.Content.State) == "CLOSED" {
+			continue
+		}
+
+		// Skip issues with excluded statuses
+		if hasExcludedStatus(item) {
+			continue
+		}
+
+		// Filter by status if specified
+		if !hasMatchingStatus(item, filterStatus) {
+			continue
+		}
+
+		// Calculate how long the issue has been on the board
+		timeOnBoard := now.Sub(item.CreatedAt)
+
+		// Only include stale issues
+		if timeOnBoard <= staleDuration {
+			continue
+		}
+
+		// Extract repository name from URL
+		repoName := ""
+		parts := strings.Split(item.Content.URL, "/")
+		if len(parts) >= 5 {
+			repoName = parts[3] + "/" + parts[4]
+		}
+
+		issue := GitHubIssue{
+			Number:           item.Content.Number,
+			Title:            item.Content.Title,
+			URL:              item.Content.URL,
+			State:            item.Content.State,
+			CreatedAt:        item.Content.CreatedAt,
+			UpdatedAt:        item.Content.UpdatedAt,
+			RepoName:         repoName,
+			AddedToProjectAt: item.CreatedAt, // When the item was added to the project
+		}
+
+		staleIssues = append(staleIssues, issue)
+	}
+
+	return staleIssues, nil
 }
 
 // GetAssignedIssues fetches all issues assigned to the user from specified organizations
@@ -201,6 +550,12 @@ func FormatIssues(issues []GitHubIssue) string {
 		output.WriteString(fmt.Sprintf("  URL: %s\n", issue.URL))
 		output.WriteString(fmt.Sprintf("  State: %s\n", issue.State))
 		output.WriteString(fmt.Sprintf("  Updated: %s\n", issue.UpdatedAt.Format("2006-01-02 15:04")))
+
+		// Show time on board if available
+		if !issue.AddedToProjectAt.IsZero() {
+			daysOnBoard := int(time.Since(issue.AddedToProjectAt).Hours() / 24)
+			output.WriteString(fmt.Sprintf("  Time on board: %d days\n", daysOnBoard))
+		}
 	}
 
 	return output.String()

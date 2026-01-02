@@ -205,10 +205,57 @@ func (c *CLI) ListEntries(category string) error {
 }
 
 func (c *CLI) ShowGitHubAssignments() error {
+	return c.ShowGitHubAssignmentsWithOptions("", 0, "")
+}
+
+func (c *CLI) ShowGitHubAssignmentsWithOptions(projectNodeID string, staleThresholdWeeks int, filterStatus string) error {
 	gh := NewGitHubManager("vjeffrey")
 
 	fmt.Println("\n🔍 Fetching GitHub assignments...")
 
+	mondoohqToken := os.Getenv("GITHUB_TOKEN_ASSISTANT_MONDOOHQ")
+	if mondoohqToken == "" {
+		return fmt.Errorf("GITHUB_TOKEN_ASSISTANT_MONDOOHQ not set")
+	}
+
+	// If project filtering is requested
+	if projectNodeID != "" {
+		fmt.Printf("\n📊 Fetching issues from project board...\n")
+		if filterStatus != "" {
+			fmt.Printf("   Filtering by status: %s\n", filterStatus)
+		}
+
+		// If stale threshold is specified, only show stale issues
+		if staleThresholdWeeks > 0 {
+			staleDuration := time.Duration(staleThresholdWeeks) * 7 * 24 * time.Hour
+			staleIssues, err := gh.GetStaleProjectIssues(projectNodeID, mondoohqToken, staleDuration, filterStatus)
+			if err != nil {
+				return fmt.Errorf("failed to fetch stale issues: %w", err)
+			}
+
+			fmt.Printf("\n⏰ Issues on board for more than %d weeks:\n", staleThresholdWeeks)
+			fmt.Println(strings.Repeat("=", 80))
+			fmt.Println(FormatIssues(staleIssues))
+			fmt.Printf("\nTotal: %d stale issue(s)\n", len(staleIssues))
+
+			return nil
+		}
+
+		// Otherwise show assigned issues
+		projectIssues, err := gh.GetProjectIssuesForUser(projectNodeID, mondoohqToken, filterStatus)
+		if err != nil {
+			return fmt.Errorf("failed to fetch project issues: %w", err)
+		}
+
+		fmt.Println("\n📋 Issues assigned to vjeffrey on project board:")
+		fmt.Println(strings.Repeat("=", 80))
+		fmt.Println(FormatIssues(projectIssues))
+		fmt.Printf("\nTotal: %d issue(s)\n", len(projectIssues))
+
+		return nil
+	}
+
+	// Default behavior - fetch from all orgs
 	var allIssues []GitHubIssue
 	var allMentionedIssues []GitHubIssue
 	var allMentionedPRs []GitHubPR
@@ -227,12 +274,6 @@ func (c *CLI) ShowGitHubAssignments() error {
 			continue
 		}
 
-		// cmd := exec.Command("echo", token, "|", "gh", "auth", "login", "--with-token")
-		// _, err := cmd.Output()
-		// if err != nil {
-		// 	fmt.Printf("⚠️  Warning: failed to login %s", err.Error())
-		// 	return err
-		// }
 		// Get assigned issues for this org
 		issues, err := gh.GetAssignedIssues(org, token)
 		if err != nil {
@@ -277,7 +318,6 @@ func (c *CLI) ShowGitHubAssignments() error {
 	fmt.Println("\n✅ Recently merged PRs (last 12 hours):")
 	fmt.Println(strings.Repeat("=", 80))
 
-	mondoohqToken := os.Getenv("GITHUB_TOKEN_ASSISTANT_MONDOOHQ")
 	if mondoohqToken != "" {
 		repos := []string{"mondoohq/server", "mondoohq/console", "mondoohq/test-metrics-bigquery"}
 		recentPRs, err := gh.GetRecentMergedPRs(repos, 12, mondoohqToken)

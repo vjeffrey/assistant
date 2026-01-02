@@ -17,6 +17,8 @@ func main() {
 	questions := flag.Bool("questions", false, "Run the daily questions interactively")
 	morning := flag.Bool("morning", false, "Run the morning question about daily focus")
 	github := flag.Bool("github", false, "Show GitHub assignments, mentions, and recent merges")
+	githubStale := flag.Int("github-stale", 0, "Show issues on project board for more than N weeks (requires GITHUB_PROJECT env var)")
+	filterStatus := flag.String("filter-status", "", "Filter issues by status field value (e.g., '5-9 january')")
 
 	flag.Parse()
 
@@ -28,9 +30,10 @@ func main() {
 	defer db.Close()
 
 	// GitHub mode
-	if *github {
+	githubProjectEnv := os.Getenv("GITHUB_PROJECT")
+	if *github || githubProjectEnv != "" {
 		cli := NewCLI(db)
-		if err := cli.ShowGitHubAssignments(); err != nil {
+		if err := cli.ShowGitHubAssignmentsWithOptions(githubProjectEnv, *githubStale, *filterStatus); err != nil {
 			log.Fatalf("Error fetching GitHub assignments: %v", err)
 		}
 		return
@@ -72,14 +75,19 @@ func main() {
 	// Default: show usage
 	fmt.Println("Daily Assistant")
 	fmt.Println("\nUsage:")
-	fmt.Println("  assistant --daemon          Run in background with scheduled notifications")
-	fmt.Println("  assistant --questions       Answer daily questions (journal, exercise, symptoms, reminders)")
-	fmt.Println("  assistant --morning         Answer morning question about daily focus")
-	fmt.Println("  assistant --github          Show GitHub assignments, mentions, and recent merges")
-	fmt.Println("  assistant --list journal    List all journal entries")
-	fmt.Println("  assistant --list exercise   List all exercise entries")
-	fmt.Println("  assistant --list symptoms   List all symptom entries")
-	fmt.Println("  assistant --list reminders  List all reminders")
+	fmt.Println("  assistant --daemon                              Run in background with scheduled notifications")
+	fmt.Println("  assistant --questions                           Answer daily questions (journal, exercise, symptoms, reminders)")
+	fmt.Println("  assistant --morning                             Answer morning question about daily focus")
+	fmt.Println("  assistant --github                              Show GitHub assignments, mentions, and recent merges")
+	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github     Show issues assigned to you on a specific project board")
+	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github --github-stale 3  Show issues on board for more than 3 weeks")
+	fmt.Println("  GITHUB_PROJECT=<node_id> assistant --github --filter-status '5-9 january'  Filter by status field value")
+	fmt.Println("  assistant --list journal                        List all journal entries")
+	fmt.Println("  assistant --list exercise                       List all exercise entries")
+	fmt.Println("  assistant --list symptoms                       List all symptom entries")
+	fmt.Println("  assistant --list reminders                      List all reminders")
+	fmt.Println("\nEnvironment Variables:")
+	fmt.Println("  GITHUB_PROJECT                                  Project GraphQL node ID (e.g., PVT_kwDOABpK8s4ApRn8)")
 	fmt.Println("\nScheduled times:")
 	fmt.Println("  7:45 AM - Daily summary + special focus question")
 	fmt.Println("  1:00 PM - Daily check-in questions")

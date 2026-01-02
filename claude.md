@@ -81,3 +81,96 @@ CGO_ENABLED=1 go build
 ```
 
 Without CGO enabled, you'll get an error: "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work."
+
+## GitHub Projects v2 Integration
+
+### Overview
+
+The tool now supports filtering GitHub issues by project board and identifying stale issues using the GitHub Projects v2 GraphQL API.
+
+### Key Implementation Details
+
+**Authentication & Scopes**
+- Requires `project` scope in addition to `repo` and `read:org`
+- Add scope: `gh auth refresh -s project`
+- Uses `GH_TOKEN` environment variable (same pattern as existing GitHub integration)
+
+**Project Node IDs**
+- Projects are identified by GraphQL node IDs (format: `PVT_...`)
+- Cannot be queried directly from organization without `project` scope
+- Helper script provided: `./get-project-id.sh <org> <project-number>`
+
+**GraphQL API Structure**
+```graphql
+{
+  node(id: "PVT_...") {
+    ... on ProjectV2 {
+      items(first: 100) {
+        nodes {
+          content {
+            ... on Issue {
+              number, title, assignees { nodes { login } }
+            }
+          }
+          createdAt  # When added to project (used for "time on board")
+        }
+      }
+    }
+  }
+}
+```
+
+**Filtering Approach**
+- Server-side filtering by assignee not supported by GitHub API
+- Solution: Fetch all project items, filter client-side by assignee
+- Only shows Issues (not PRs or drafts) assigned to the user
+- Time on board calculated from `ProjectItem.createdAt` (when added to project)
+
+**Pagination**
+- Uses cursor-based pagination (`pageInfo.hasNextPage`, `pageInfo.endCursor`)
+- Fetches 100 items per page
+- Continues until all items retrieved
+
+### Usage
+
+The project node ID is read from the `GITHUB_PROJECT` environment variable:
+
+```bash
+# View issues on project board
+GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github
+
+# View stale issues (>3 weeks on board)
+GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github --github-stale 3
+
+# Filter by status field
+GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8 ./assistant --github --filter-status '5-9 january'
+
+# Or set it in your environment
+export GITHUB_PROJECT=PVT_kwDOABpK8s4ApRn8
+./assistant --github
+./assistant --github --github-stale 3
+```
+
+### Common Errors
+
+**"Resource not accessible by personal access token"**
+- Missing `project` scope
+- Solution: `gh auth refresh -s project`
+
+**"Could not resolve to a node with the global id"**
+- Invalid project node ID
+- Solution: Use `./get-project-id.sh` to get correct ID
+
+### Environment Variables
+
+- `GITHUB_PROJECT`: Project GraphQL node ID (format: `PVT_...`)
+  - When set, the `--github` flag will filter issues to this project board
+  - Replaces the previous `--github-project` command-line flag
+
+### Files Added/Modified
+
+- `github.go`: Added `ProjectV2`, `ProjectItem` structs and query functions
+- `cli.go`: Added `ShowGitHubAssignmentsWithOptions()` for project filtering
+- `main.go`: Changed from `--github-project` flag to `GITHUB_PROJECT` env var
+- `get-project-id.sh`: Helper script to retrieve project node IDs
+- `GITHUB_PROJECTS.md`: Comprehensive documentation

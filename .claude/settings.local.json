@@ -27,7 +27,23 @@
       "Bash(echo:*)",
       "Bash(gh auth login:*)",
       "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh search:*)",
-      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh search issues org:mondoohq assignee:vjeffrey is:issue is:open --json number,title --limit 5)"
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh search issues org:mondoohq assignee:vjeffrey is:issue is:open --json number,title --limit 5)",
+      "Bash(gh project --help:*)",
+      "Bash(gh project item-list:*)",
+      "Bash(GH_TOKEN=\"${GITHUB_TOKEN_ASSISTANT_MONDOOHQ}\" gh project item-list:*)",
+      "Bash(GH_TOKEN=\"${GITHUB_TOKEN_ASSISTANT_MONDOOHQ}\" gh api:*)",
+      "Bash(./get-project-id.sh:*)",
+      "Bash(gh auth refresh:*)",
+      "Bash(gh api graphql:*)",
+      "Bash(then echo \"Token is set \\(length: $#GITHUB_TOKEN_ASSISTANT_MONDOOHQ\\)\")",
+      "Bash(else echo \"Token is NOT set\")",
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh api graphql -f query='{\n  organization\\(login: \"\"mondoohq\"\"\\) {\n    projectV2\\(number: 14\\) {\n      id\n      title\n      url\n    }\n  }\n}')",
+      "Bash(jq:*)",
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh api graphql -f query='{\n  organization\\(login: \"\"mondoohq\"\"\\) {\n    projectsV2\\(first: 5\\) {\n      nodes {\n        id\n        number\n        title\n        url\n      }\n    }\n  }\n}')",
+      "Bash(GH_TOKEN=\"$GITHUB_TOKEN_ASSISTANT_MONDOOHQ\" gh api:*)",
+      "Bash(./assistant:*)",
+      "Bash(gh project list:*)",
+      "Bash(gh api:*)"
     ]
   }
 }
