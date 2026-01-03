@@ -201,6 +201,10 @@ A lightweight web interface is available for easier viewing of GitHub data:
 ```bash
 ./assistant --web 8080
 # Opens at http://localhost:8080
+
+# Development mode with fake data (for styling/development work)
+./assistant --web-dev 8080
+# Opens at http://localhost:8080 with mock data - no GitHub API calls
 ```
 
 The web UI automatically displays:
@@ -208,6 +212,15 @@ The web UI automatically displays:
 - Stale issues (>3 weeks on board)
 - All assigned issues from configured orgs
 - Recently merged PRs (last 12 hours)
+
+**Development Mode:**
+The `--web-dev` flag starts the web server with realistic fake data instead of making GitHub API calls. This is useful for:
+- Working on CSS styling and layout changes
+- Testing UI components without API rate limits
+- Developing without network connectivity
+- Quick iteration on visual changes
+
+The mock data includes sample issues, PRs, labels, assignees, and project statuses that match the real data structure.
 
 ### Output Enhancements
 

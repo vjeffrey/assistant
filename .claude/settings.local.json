@@ -75,7 +75,10 @@
       "Bash(./myassistant:*)",
       "Bash(else echo \"GITHUB_TOKEN_ASSISTANT_MONDOOHQ is NOT set\")",
       "Bash(make check-creds:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(xargs kill:*)"
     ]
   }
 }

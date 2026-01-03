@@ -20,7 +20,6 @@ func NewWebServer(db *Database) *WebServer {
 type WebData struct {
 	Title          string
 	AssignedIssues []GitHubIssue
-	ProjectIssues  []GitHubIssue
 	StaleIssues    []GitHubIssue
 	RecentPRs      []GitHubPR
 	Error          string
@@ -40,7 +39,13 @@ func (ws *WebServer) Start(port string) error {
 }
 
 func (ws *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	data := ws.fetchGitHubData()
+	var data WebData
+	// Check if we're in dev mode
+	if os.Getenv("WEB_DEV_MODE") == "true" {
+		data = ws.fetchMockData()
+	} else {
+		data = ws.fetchGitHubData()
+	}
 
 	funcMap := template.FuncMap{
 		"daysOnBoard": func(t time.Time) int {
@@ -59,6 +64,113 @@ func (ws *WebServer) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	data := ws.fetchGitHubData()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+func (ws *WebServer) fetchMockData() WebData {
+	now := time.Now()
+	threeDaysAgo := now.AddDate(0, 0, -3)
+	oneWeekAgo := now.AddDate(0, 0, -7)
+	threeWeeksAgo := now.AddDate(0, 0, -21)
+	oneMonthAgo := now.AddDate(0, 0, -30)
+
+	return WebData{
+		Title:       "GitHub Dashboard (DEV MODE)",
+		LastUpdated: now.Format("2006-01-02 15:04:05"),
+		ProjectName: "PVT_kwDOABpK8s4ApRn8",
+		AssignedIssues: []GitHubIssue{
+			{
+				Number:           1234,
+				Title:            "Implement new authentication system",
+				State:            "open",
+				URL:              "https://github.com/mondoohq/server/issues/1234",
+				RepoName:         "mondoohq/server",
+				UpdatedAt:        threeDaysAgo,
+				AddedToProjectAt: oneWeekAgo,
+				ProjectStatus:    "In Progress",
+				Assignees:        []GitHubUser{{Login: "vjeffrey"}},
+				Labels:           []GitHubLabel{{Name: "feature"}, {Name: "high-priority"}},
+			},
+			{
+				Number:           5678,
+				Title:            "Fix login redirect bug",
+				State:            "open",
+				URL:              "https://github.com/mondoohq/console/issues/5678",
+				RepoName:         "mondoohq/console",
+				UpdatedAt:        now.AddDate(0, 0, -1),
+				AddedToProjectAt: threeDaysAgo,
+				ProjectStatus:    "Todo",
+				Assignees:        []GitHubUser{{Login: "vjeffrey"}, {Login: "teammate"}},
+				Labels:           []GitHubLabel{{Name: "bug"}},
+			},
+			{
+				Number:           9012,
+				Title:            "Update API documentation",
+				State:            "open",
+				URL:              "https://github.com/mondoohq/server/issues/9012",
+				RepoName:         "mondoohq/server",
+				UpdatedAt:        oneWeekAgo,
+				AddedToProjectAt: now.AddDate(0, 0, -5),
+				ProjectStatus:    "Review",
+				Assignees:        []GitHubUser{{Login: "vjeffrey"}},
+				Labels:           []GitHubLabel{{Name: "documentation"}},
+			},
+		},
+		StaleIssues: []GitHubIssue{
+			{
+				Number:           1111,
+				Title:            "Refactor authentication middleware",
+				State:            "open",
+				URL:              "https://github.com/mondoohq/server/issues/1111",
+				RepoName:         "mondoohq/server",
+				UpdatedAt:        threeWeeksAgo,
+				AddedToProjectAt: oneMonthAgo,
+				ProjectStatus:    "In Progress",
+				Assignees:        []GitHubUser{{Login: "vjeffrey"}},
+				Labels:           []GitHubLabel{{Name: "refactoring"}, {Name: "backend"}},
+			},
+			{
+				Number:           2222,
+				Title:            "Performance optimization for dashboard",
+				State:            "open",
+				URL:              "https://github.com/mondoohq/console/issues/2222",
+				RepoName:         "mondoohq/console",
+				UpdatedAt:        now.AddDate(0, 0, -25),
+				AddedToProjectAt: now.AddDate(0, 0, -28),
+				ProjectStatus:    "Todo",
+				Assignees:        []GitHubUser{{Login: "vjeffrey"}},
+				Labels:           []GitHubLabel{{Name: "performance"}, {Name: "frontend"}},
+			},
+		},
+		RecentPRs: []GitHubPR{
+			{
+				Number:    789,
+				Title:     "Add user profile page",
+				URL:       "https://github.com/mondoohq/console/pull/789",
+				RepoName:  "mondoohq/console",
+				MergedAt:  now.Add(-2 * time.Hour),
+				Assignees: []GitHubUser{{Login: "vjeffrey"}},
+				Labels:    []GitHubLabel{{Name: "feature"}},
+			},
+			{
+				Number:    790,
+				Title:     "Fix memory leak in background worker",
+				URL:       "https://github.com/mondoohq/server/pull/790",
+				RepoName:  "mondoohq/server",
+				MergedAt:  now.Add(-5 * time.Hour),
+				Assignees: []GitHubUser{{Login: "vjeffrey"}},
+				Labels:    []GitHubLabel{{Name: "bug"}, {Name: "critical"}},
+			},
+			{
+				Number:    791,
+				Title:     "Update dependencies to latest versions",
+				URL:       "https://github.com/mondoohq/server/pull/791",
+				RepoName:  "mondoohq/server",
+				MergedAt:  now.Add(-10 * time.Hour),
+				Assignees: []GitHubUser{{Login: "vjeffrey"}},
+				Labels:    []GitHubLabel{{Name: "maintenance"}},
+			},
+		},
+	}
 }
 
 func (ws *WebServer) fetchGitHubData() WebData {
@@ -83,7 +195,7 @@ func (ws *WebServer) fetchGitHubData() WebData {
 		if err != nil {
 			data.Error = fmt.Sprintf("Failed to fetch project issues: %v", err)
 		} else {
-			data.ProjectIssues = projectIssues
+			data.AssignedIssues = projectIssues
 		}
 
 		// Fetch stale issues (>3 weeks)
@@ -100,29 +212,29 @@ func (ws *WebServer) fetchGitHubData() WebData {
 	}
 
 	// Fetch assigned issues from all orgs
-	orgTokens := map[string]string{
-		"mondoohq":         "GITHUB_TOKEN_ASSISTANT_MONDOOHQ",
-		"mondoo-community": "GITHUB_TOKEN_ASSISTANT_MONDOO_COMMUNITY",
-	}
+	// orgTokens := map[string]string{
+	// 	"mondoohq":         "GITHUB_TOKEN_ASSISTANT_MONDOOHQ",
+	// 	"mondoo-community": "GITHUB_TOKEN_ASSISTANT_MONDOO_COMMUNITY",
+	// }
 
-	var allIssues []GitHubIssue
-	for org, tokenEnv := range orgTokens {
-		token := os.Getenv(tokenEnv)
-		if token == "" {
-			continue
-		}
+	// var allIssues []GitHubIssue
+	// for org, tokenEnv := range orgTokens {
+	// 	token := os.Getenv(tokenEnv)
+	// 	if token == "" {
+	// 		continue
+	// 	}
 
-		issues, err := gh.GetAssignedIssues(org, token)
-		if err != nil {
-			if data.Error != "" {
-				data.Error += "; "
-			}
-			data.Error += fmt.Sprintf("Failed to fetch issues from %s: %v", org, err)
-		} else {
-			allIssues = append(allIssues, issues...)
-		}
-	}
-	data.AssignedIssues = allIssues
+	// 	issues, err := gh.GetAssignedIssues(org, token)
+	// 	if err != nil {
+	// 		if data.Error != "" {
+	// 			data.Error += "; "
+	// 		}
+	// 		data.Error += fmt.Sprintf("Failed to fetch issues from %s: %v", org, err)
+	// 	} else {
+	// 		allIssues = append(allIssues, issues...)
+	// 	}
+	// }
+	// data.AssignedIssues = allIssues
 
 	// Fetch recent merged PRs
 	repos := []string{"mondoohq/server", "mondoohq/console", "mondoohq/test-metrics-bigquery"}
@@ -238,38 +350,34 @@ const htmlTemplate = `
             margin-left: 10px;
         }
         .badge-count {
-            background: #1f6feb;
+            background: #1febbbff;
             color: white;
         }
         .issue, .pr {
-            background: #0d1117;
-            padding: 15px;
-            margin-bottom: 12px;
-            border-radius: 6px;
-            border: 1px solid #30363d;
+            margin-bottom: 8px;
             transition: border-color 0.2s;
         }
         .issue:hover, .pr:hover {
             border-color: #58a6ff;
         }
         .issue-title, .pr-title {
-            font-size: 1.1em;
-            margin-bottom: 8px;
+            font-size: 1em;
+            margin-bottom: 6px;
         }
         .issue-title a, .pr-title a {
-            color: #58a6ff;
+            color: #fc58ffff;
             text-decoration: none;
         }
         .issue-title a:hover, .pr-title a:hover {
             text-decoration: underline;
         }
         .issue-meta, .pr-meta {
-            font-size: 0.9em;
+            font-size: 0.50em;
             color: #8b949e;
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
-            margin-top: 8px;
+            gap: 12px;
+            margin-top: 4px;
         }
         .meta-item {
             display: flex;
@@ -295,7 +403,7 @@ const htmlTemplate = `
             font-weight: 600;
         }
         .label-badge {
-            background: #1f6feb;
+            background: #1fbbebff;
             padding: 3px 8px;
             border-radius: 10px;
             font-size: 0.8em;
@@ -318,7 +426,7 @@ const htmlTemplate = `
             gap: 20px;
         }
         .refresh-btn {
-            background: #238636;
+            background: #8ab3d1ff;
             color: white;
             border: none;
             padding: 10px 20px;
@@ -354,102 +462,24 @@ const htmlTemplate = `
 
         <div class="tabs">
             {{if .ProjectName}}
-            <button class="tab active" onclick="switchTab(event, 'project-board')">
-                📊 Project Board <span class="badge badge-count">{{len .ProjectIssues}}</span>
+            <button class="tab active" onclick="switchTab(event, 'assigned-issues')">
+                📋 Assigned Issues <span class="badge badge-count">{{len .AssignedIssues}}</span>
             </button>
             <button class="tab" onclick="switchTab(event, 'stale-issues')">
                 ⏰ Stale Issues <span class="badge badge-count">{{len .StaleIssues}}</span>
-            </button>
-            <button class="tab" onclick="switchTab(event, 'all-issues')">
-                📋 All Issues <span class="badge badge-count">{{len .AssignedIssues}}</span>
             </button>
             <button class="tab" onclick="switchTab(event, 'recent-prs')">
                 ✅ Recent PRs <span class="badge badge-count">{{len .RecentPRs}}</span>
             </button>
             {{else}}
-            <button class="tab active" onclick="switchTab(event, 'all-issues')">
-                📋 All Issues <span class="badge badge-count">{{len .AssignedIssues}}</span>
-            </button>
-            <button class="tab" onclick="switchTab(event, 'recent-prs')">
+            <button class="tab active" onclick="switchTab(event, 'recent-prs')">
                 ✅ Recent PRs <span class="badge badge-count">{{len .RecentPRs}}</span>
             </button>
             {{end}}
         </div>
 
         {{if .ProjectName}}
-        <div id="project-board" class="tab-content active">
-            <h2>📊 Project Board Issues</h2>
-            {{if .ProjectIssues}}
-                {{range .ProjectIssues}}
-                <div class="issue">
-                    <div class="issue-title">
-                        <a href="{{.URL}}" target="_blank">#{{.Number}} - {{.Title}}</a>
-                    </div>
-                    <div class="issue-meta">
-                        <span class="meta-item repo-badge">{{.RepoName}}</span>
-                        {{if .Assignees}}
-                        <span class="meta-item">
-                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
-                        </span>
-                        {{end}}
-                        {{if .Labels}}
-                        <span class="meta-item">
-                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
-                        </span>
-                        {{end}}
-                        {{if .ProjectStatus}}
-                        <span class="meta-item status-badge">{{.ProjectStatus}}</span>
-                        {{end}}
-                        <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
-                        {{if not .AddedToProjectAt.IsZero}}
-                        <span class="meta-item time-badge">{{daysOnBoard .AddedToProjectAt}} days on board</span>
-                        {{end}}
-                    </div>
-                </div>
-                {{end}}
-            {{else}}
-                <div class="empty">No project issues assigned to you</div>
-            {{end}}
-        </div>
-
-        <div id="stale-issues" class="tab-content">
-            <h2>⏰ Stale Issues (>3 weeks)</h2>
-            {{if .StaleIssues}}
-                {{range .StaleIssues}}
-                <div class="issue">
-                    <div class="issue-title">
-                        <a href="{{.URL}}" target="_blank">#{{.Number}} - {{.Title}}</a>
-                    </div>
-                    <div class="issue-meta">
-                        <span class="meta-item repo-badge">{{.RepoName}}</span>
-                        {{if .Assignees}}
-                        <span class="meta-item">
-                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
-                        </span>
-                        {{end}}
-                        {{if .Labels}}
-                        <span class="meta-item">
-                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
-                        </span>
-                        {{end}}
-                        {{if .ProjectStatus}}
-                        <span class="meta-item status-badge">{{.ProjectStatus}}</span>
-                        {{end}}
-                        <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
-                        {{if not .AddedToProjectAt.IsZero}}
-                        <span class="meta-item time-badge">{{daysOnBoard .AddedToProjectAt}} days on board</span>
-                        {{end}}
-                    </div>
-                </div>
-                {{end}}
-            {{else}}
-                <div class="empty">No stale issues found</div>
-            {{end}}
-        </div>
-        {{end}}
-
-        <div id="all-issues" class="tab-content{{if not .ProjectName}} active{{end}}">
-            <h2>📋 All Assigned Issues</h2>
+        <div id="assigned-issues" class="tab-content active">
             {{if .AssignedIssues}}
                 {{range .AssignedIssues}}
                 <div class="issue">
@@ -463,23 +493,66 @@ const htmlTemplate = `
                             {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
                         </span>
                         {{end}}
+                        {{if .ProjectStatus}}
+                        <span class="meta-item status-badge">{{.ProjectStatus}}</span>
+                        {{end}}
+                        <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
+                        {{if not .AddedToProjectAt.IsZero}}
+                        <span class="meta-item time-badge">{{daysOnBoard .AddedToProjectAt}} days on board</span>
+                        {{end}}
+                    </div>
+                    <div class="issue-meta">
                         {{if .Labels}}
                         <span class="meta-item">
                             {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
                         </span>
                         {{end}}
-                        <span class="meta-item">State: {{.State}}</span>
-                        <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
                     </div>
                 </div>
                 {{end}}
             {{else}}
-                <div class="empty">No issues assigned to you</div>
+                <div class="empty">No assigned issues found</div>
             {{end}}
         </div>
 
+        <div id="stale-issues" class="tab-content">
+            {{if .StaleIssues}}
+                {{range .StaleIssues}}
+                <div class="issue">
+                    <div class="issue-title">
+                        <a href="{{.URL}}" target="_blank">#{{.Number}} - {{.Title}}</a>
+                    </div>
+                    <div class="issue-meta">
+                        <span class="meta-item repo-badge">{{.RepoName}}</span>
+                        {{if .Assignees}}
+                        <span class="meta-item">
+                            {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
+                        </span>
+                        {{end}}
+                        {{if .ProjectStatus}}
+                        <span class="meta-item status-badge">{{.ProjectStatus}}</span>
+                        {{end}}
+                        <span class="meta-item">Updated: {{.UpdatedAt.Format "2006-01-02"}}</span>
+                        {{if not .AddedToProjectAt.IsZero}}
+                        <span class="meta-item time-badge">{{daysOnBoard .AddedToProjectAt}} days on board</span>
+                        {{end}}
+                    </div>
+                    <div class="issue-meta">
+                        {{if .Labels}}
+                        <span class="meta-item">
+                            {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
+                        </span>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            {{else}}
+                <div class="empty">No stale issues found</div>
+            {{end}}
+        </div>
+        {{end}}
+
         <div id="recent-prs" class="tab-content">
-            <h2>✅ Recently Merged PRs (12h)</h2>
             {{if .RecentPRs}}
                 {{range .RecentPRs}}
                 <div class="pr">
@@ -493,12 +566,14 @@ const htmlTemplate = `
                             {{range .Assignees}}<span class="assignee-badge">@{{.Login}}</span>{{end}}
                         </span>
                         {{end}}
+                        <span class="meta-item">Merged: {{.MergedAt.Format "2006-01-02 15:04"}}</span>
+                    </div>
+                    <div class="issue-meta">
                         {{if .Labels}}
                         <span class="meta-item">
                             {{range .Labels}}<span class="label-badge">{{.Name}}</span>{{end}}
                         </span>
                         {{end}}
-                        <span class="meta-item">Merged: {{.MergedAt.Format "2006-01-02 15:04"}}</span>
                     </div>
                 </div>
                 {{end}}
