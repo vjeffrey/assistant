@@ -421,6 +421,9 @@ func (g *GitHubManager) GetStaleProjectIssues(projectNodeID string, token string
 		}
 
 		// Filter by status if specified
+		if os.Getenv("GIT_STALE_FILTER") != "" {
+			filterStatus = os.Getenv("GIT_STALE_FILTER")
+		}
 		if !hasMatchingStatus(item, filterStatus) {
 			continue
 		}
